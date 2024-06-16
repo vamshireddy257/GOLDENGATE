@@ -1,0 +1,101 @@
+setup new servers.
+ggprod
+ggdev
+
+install oracle_home
+and create 1 database in each server.
+
+Disable firewall on both machines
+
+systemctl stop firewalld
+systemctl disable firewalld
+
+
+vi /etc/hosts
+
+192.168.50.71 ggprod
+192.168.50.72 ggdev
+
+https://edelivery.oracle.com/osdc/faces/SoftwareDelivery
+
+Oracle GoldenGate 19.1.0.0
+Oracle GoldenGate 19.1.0.0.4 for Oracle on Linux x86-64, 530.5 MB
+
+
+
+unzip GG_software.zip
+
+cd fbo_ggs_Linux_x64_shiphome/Disk1
+./runInstaller
+
+installation Option: : Oracle golden gate for 19C.
+
+specify installation details:
+
+/u01/app/oracle/product/gg
+
+uncheck start mgr.
+
+finish.
+
+add below to bash profile
+
+vi .bash_profile
+LD_LIBRARY_PATH=$ORACLE_HOME/lib
+export GG_HOME=/u01/app/oracle/product/gg
+
+
+cd $GG_HOME
+./ggsci
+GGSCI> create subdirs 
+GGSCI> exit
+
+
+On both proddb and devdb:
+=========================
+select supplemental_log_data_min, force_logging from v$database;
+ALTER DATABASE ADD SUPPLEMENTAL LOG DATA;
+ALTER DATABASE FORCE LOGGING;
+select supplemental_log_data_min, force_logging from v$database;
+
+Enable Golden Gate Replication Parameter: From 12.1.0.2 onwards
+ ALTER SYSTEM SET ENABLE_GOLDENGATE_REPLICATION = TRUE;
+
+
+Create GoldenGate Database User: 
+
+On proddb:
+==========
+Create tablespace gg_tbs datafile '/u01/app/oracle/oradata/PRODDB/datafile/gg_tbs01.dbf' size 500M;
+
+Create user ogg identified by ogg default tablespace gg_tbs;
+
+On devdb:
+=========
+Create tablespace gg_tbs datafile '/u01/app/oracle/oradata/DEVDB/datafile/gg_tbs01.dbf' size 500M;
+
+Create user ogg identified by ogg default tablespace gg_tbs;
+
+Grant admin privileges to ogg user
+On both proddb and devdb:
+=========================
+exec DBMS_GOLDENGATE_AUTH.GRANT_ADMIN_PRIVILEGE('ogg');
+grant DBA to ogg;
+
+
+Configure and start manager process:
+On proddb and devdb :
+====================
+ggsci> edit param mgr
+port 7809
+
+ggsci> view params mgr
+ggsci> start mgr
+
+ggsci> info mgr
+
+ggsci> info all
+
+
+
+
