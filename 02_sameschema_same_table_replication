@@ -1,0 +1,144 @@
+==================================================
+single schema single table replication.
+==================================================
+On both proddb and devdb:
+=========================
+Create user hrms_user identified by tiger;
+Grant connect, resource to hrms_user;
+Alter user hrms_user quota unlimited on users;
+
+Conn hrms_user/tiger
+
+CREATE TABLE emp
+(
+ empno NUMBER PRIMARY KEY,
+ ename VARCHAR2(30),
+ deptno NUMBER,
+ sal NUMBER
+); 
+
+On proddb:
+==========
+cd $GG_HOME
+./ggsci
+GGSCI> dblogin userid ogg, password ogg
+
+Add table level supplemental logging via Golden Gate
+
+On GGPROD:
+==========
+GGSCI> add trandata hrms_user.emp
+Logging of supplemental redo data enabled for table hrms_user.emp.
+TRANDATA for scheduling columns has been added on table 'hrms_user.emp'.
+TRANDATA for instantiation CSN has been added on table 'hrms_user.emp'.
+
+Create GG Extract Process
+
+On GGPROD:
+==========
+GGSCI> ADD EXTRACT ext1, INTEGRATED TRANLOG, BEGIN NOW
+EXTRACT (Integrated) added.
+GGSCI> register extract ext1 database
+
+--> execute above only in integrated capture mode
+
+Create local trail file for extract process
+
+GGSCI> add exttrail /u01/app/oracle/product/gg/dirdat/ex, extract ext1
+
+GGSCI> edit param ext1
+EXTRACT ext1
+USERID ogg, PASSWORD ogg
+EXTTRAIL /u01/app/oracle/product/gg/dirdat/ex
+TABLE hrms_user.emp;
+
+
+Create GG DP Process
+
+GGSCI> add extract dp1, EXTTRAILSOURCE /u01/app/oracle/product/gg/dirdat/ex
+
+Create remote trail file for extract process
+
+GGSCI> add rmttrail /u01/app/oracle/product/gg/dirdat/rt, extract dp1
+
+Create parameter file for data pump process
+
+GGSCI> edit param dp1
+EXTRACT dp1
+USERID ogg, PASSWORD ogg
+RMTHOST ggdev, MGRPORT 7809
+RMTTRAIL /u01/app/oracle/product/gg/dirdat/rt
+TABLE hrms_user.emp;
+
+Create GG Replicate on target
+
+On GGDEV:
+=========
+GGSCI> dblogin userid ogg, password ogg
+GGSCI> add replicat rep1, integrated exttrail /u01/app/oracle/product/gg/dirdat/rt
+
+Create parameter file for replicat on target
+
+GGSCI> edit param rep1
+REPLICAT rep1
+USERID ogg, PASSWORD ogg
+ASSUMETARGETDEFS
+MAP hrms_user.emp TARGET hrms_user.emp;
+
+On GGPROD:
+==========
+./ggsci
+GGSCI> start mgr
+GGSCI> start ext1
+GGSCI> start dp1
+
+Start manager and replicat on target
+
+On GGDEV:
+=========
+./ggsci
+GGSCI> start mgr
+GGSCI> start rep1
+
+Check all the processes in case of any error
+
+GGSCI> view report ext1
+GGSCI> view report dp1
+
+systemctl stop firewalld
+systemctl disable firewalld
+
+Test Replication
+
+Note: always make sure extract, pump, and replicate are running before testing
+
+
+Insert rows in source table
+
+On PRODDB:
+==========
+INSERT INTO emp VALUES (1,'Alpha',10,100);
+INSERT INTO emp VALUES (2,'Beta',20,200);
+commit;
+Check on target if the table got rows inserted or not. Insert some more rows on source
+
+On PRODDB:
+==========
+INSERT INTO emp VALUES (3,'Gamma',30,300);
+INSERT INTO emp VALUES (4,'Tang',40,400);
+Commit;
+
+
+Stop Replication
+
+Always stop extract and pump first
+
+On GGPROD:
+==========
+GGSCI> stop ext1 wait for some time before stopping pump process
+GGSCI> stop dp1 wait for some time before stopping replicat process
+Proceed with stopping of replicate
+
+On GGDEV:
+=========
+GGSCI> stop rep1
