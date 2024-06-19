@@ -1,0 +1,179 @@
+configure golden gate initial load
+
+DATABASE	proddb	devdb
+schema 		icici	hdfc
+table		emp		emp
+STRUCTURE	same	same
+
+
+On GGPROD:
+==========
+Create user icici identified by tiger;
+Grant connect, resource to icici;
+Alter user icici quota unlimited on users;
+
+
+Let us create EMP table from SCOTT.EMP for icici user
+==========
+Create table icici.emp as select * from scott.emp;
+alter table icici.emp add primary key ("EMPNO");
+
+Now let us get ddl of newly created emp table.
+==========
+set heading off;
+set echo off;
+Set pages 999;
+set long 90000;
+select dbms_metadata.get_ddl('TABLE','EMP','ICICI') from dual;
+
+
+On DEVDB:
+==========
+sqlplus / as sysdba
+Create user hdfc identified by tiger;
+Grant connect, resource to hdfc;
+Alter user hdfc quota unlimited on users;
+
+create EMP TABLE USING ABOVE DDL.
+
+
+######################
+Configure Change Sync
+######################
+
+On proddb:
+==========
+cd $GG_HOME
+./ggsci
+GGSCI> dblogin userid ogg, password ogg
+
+On GGPROD:(Add table level supplemental logging via Golden Gate)
+==========
+GGSCI> add trandata ICICI.EMP
+Logging of supplemental redo data enabled for table ICICI.EMP.
+
+
+Create GG Extract Process
+On GGPROD:
+==========
+GGSCI> ADD EXTRACT PICICIE1, INTEGRATED TRANLOG, BEGIN NOW
+GGSCI> register extract PICICIE1 database
+
+Create local trail file for extract process
+
+GGSCI> add exttrail /u01/app/oracle/product/gg/dirdat/pf, extract PICICIE1
+
+Create parameter file for extract process
+GGSCI> edit param PICICIE1
+EXTRACT PICICIE1
+USERID ogg, PASSWORD ogg
+EXTTRAIL /u01/app/oracle/product/gg/dirdat/pf
+TABLE ICICI.EMP;
+
+
+Create GG DP Process
+GGSCI> Add extract PICICID1, EXTTRAILSOURCE /u01/app/oracle/product/gg/dirdat/pf
+
+Create remote trail file for extract process
+GGSCI> Add rmttrail /u01/app/oracle/product/gg/dirdat/rf, extract PICICID1
+
+
+Create parameter file for data pump process
+GGSCI> edit param PICICID1
+EXTRACT PICICID1
+USERID ogg, PASSWORD ogg
+RMTHOST ggdev, MGRPORT 7809
+RMTTRAIL /u01/app/oracle/product/gg/dirdat/rf
+TABLE ICICI.EMP;
+
+
+##################################################
+
+Create GG Replicate on target
+On GGDEV:
+=========
+GGSCI> dblogin userid ogg, password ogg
+GGSCI> add replicat DHDFCR1, integrated exttrail /u01/app/oracle/product/gg/dirdat/rf
+
+Create parameter file for replicat on target
+GGSCI> edit param DHDFCR1
+REPLICAT DHDFCR1
+USERID ogg, PASSWORD ogg
+ASSUMETARGETDEFS
+MAP ICICI.EMP TARGET HDFC.EMP;
+
+
+Start manager on source and target
+
+On GGPROD:
+==========
+GGSCI> start mgr
+
+On GGDEV:
+=========
+GGSCI> start mgr
+
+###################################
+Configure Golden Gate Initial Load#
+###################################
+
+On Proddb:
+==========
+GGSCI> ADD EXTRACT INITLE, SOURCEISTABLE
+info all 
+
+Edit parameter file for initial load extract
+
+GGSCI> EDIT PARAM INITLE
+EXTRACT INITLE
+userid ogg, password ogg
+RMTHOST ggdev, mgrport 7809
+RMTTASK REPLICAT, GROUP INITLR
+TABLE ICICI.EMP;
+
+Add initial load Replicat on target
+On Devdb:
+=========
+GGSCI> ADD REPLICAT INITLR, SPECIALRUN
+
+Edit parameter file for initial load replicat
+GGSCI> EDIT PARAM INITLR
+REPLICAT INITLR
+userid ogg, password ogg
+ASSUMETARGETDEFS
+MAP ICICI.EMP, TARGET HDFC.EMP;
+
+
+#################################
+Start Initial Load & Change Sync#
+#################################
+
+On proddb:
+==========
+GGSCI> start PICICIE1
+GGSCI> start PICICID1
+
+#################################################################
+Now start the initial load extract. 
+this will automatically start the initial load replicat on target
+#################################################################
+On proddb:
+==========
+GGSCI> start INITLE
+GGSCI> INFO INITLE
+
+if you face issues add below line DEV  
+ACCESSRULE, PROG *, IPADDR *, ALLOW
+
+
+view param mgr
+GGSCI (ggprod.com as ogg@proddb) 28> view param mgr
+port 7809
+ACCESSRULE, PROG *, IPADDR *, ALLOW
+
+refresh mgr
+
+On proddb:
+==========
+GGSCI> start INITLE
+GGSCI> INFO INITLE
