@@ -61,21 +61,21 @@ GGSCI> register extract PICICIE1 database
 
 Create local trail file for extract process
 
-GGSCI> add exttrail /u01/app/oracle/product/gg/dirdat/pf, extract PICICIE1
+GGSCI> add exttrail /u01/app/oracle/product/gg/dirdat/pi, extract PICICIE1
 
 Create parameter file for extract process
 GGSCI> edit param PICICIE1
 EXTRACT PICICIE1
 USERID ogg, PASSWORD ogg
-EXTTRAIL /u01/app/oracle/product/gg/dirdat/pf
+EXTTRAIL /u01/app/oracle/product/gg/dirdat/pi
 TABLE ICICI.EMP;
 
 
 Create GG DP Process
-GGSCI> Add extract PICICID1, EXTTRAILSOURCE /u01/app/oracle/product/gg/dirdat/pf
+GGSCI> Add extract PICICID1, EXTTRAILSOURCE /u01/app/oracle/product/gg/dirdat/pi
 
 Create remote trail file for extract process
-GGSCI> Add rmttrail /u01/app/oracle/product/gg/dirdat/rf, extract PICICID1
+GGSCI> Add rmttrail /u01/app/oracle/product/gg/dirdat/pi, extract PICICID1
 
 
 Create parameter file for data pump process
@@ -83,7 +83,7 @@ GGSCI> edit param PICICID1
 EXTRACT PICICID1
 USERID ogg, PASSWORD ogg
 RMTHOST ggdev, MGRPORT 7809
-RMTTRAIL /u01/app/oracle/product/gg/dirdat/rf
+RMTTRAIL /u01/app/oracle/product/gg/dirdat/pi
 TABLE ICICI.EMP;
 
 
@@ -93,7 +93,7 @@ Create GG Replicate on target
 On GGDEV:
 =========
 GGSCI> dblogin userid ogg, password ogg
-GGSCI> add replicat DHDFCR1, integrated exttrail /u01/app/oracle/product/gg/dirdat/rf
+GGSCI> add replicat DHDFCR1, integrated exttrail /u01/app/oracle/product/gg/dirdat/pi
 
 Create parameter file for replicat on target
 GGSCI> edit param DHDFCR1
@@ -143,15 +143,16 @@ userid ogg, password ogg
 ASSUMETARGETDEFS
 MAP ICICI.EMP, TARGET HDFC.EMP;
 
+On proddb:
+==========
+GGSCI> start PICICIE1
+GGSCI> start PICICID1
 
 #################################
 Start Initial Load & Change Sync#
 #################################
 
-On proddb:
-==========
-GGSCI> start PICICIE1
-GGSCI> start PICICID1
+
 
 #################################################################
 Now start the initial load extract. 
@@ -162,13 +163,7 @@ On proddb:
 GGSCI> start INITLE
 GGSCI> INFO INITLE
 
-if you face issues add below line DEV  
-ACCESSRULE, PROG *, IPADDR *, ALLOW
-
-
-view param mgr
-GGSCI (ggprod.com as ogg@proddb) 28> view param mgr
-port 7809
+if you face issues add below line target server  
 ACCESSRULE, PROG *, IPADDR *, ALLOW
 
 refresh mgr
