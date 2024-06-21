@@ -1,0 +1,148 @@
+
+On PRODDB:
+==========
+Let us create DEPT table from SCOTT.DEPT for icici user
+==========
+Create table icici.dept as select * from scott.dept;
+alter table icici.DEPT add primary key ("DEPTNO");
+
+Now let us get ddl of newly created DEPT table.
+==========
+set heading off;
+set echo off;
+Set pages 999;
+set long 90000;
+select dbms_metadata.get_ddl('TABLE','DEPT','ICICI') from dual;
+
+On DEVDB:
+==========
+sqlplus / as sysdba
+create DEPT TABLE USING ABOVE DDL.
+
+On proddb:
+==========
+cd $GG_HOME
+./ggsci
+GGSCI> dblogin userid ogg, password ogg
+
+On GGPROD:(Add table level supplemental logging via Golden Gate)
+==========
+GGSCI> add trandata ICICI.DEPT
+Logging of supplemental redo data enabled for table ICICI.DEPT.
+
+
+Create GG Extract Process
+On GGPROD:
+==========
+GGSCI> ADD EXTRACT PICICIE2, INTEGRATED TRANLOG, BEGIN NOW
+GGSCI> register extract PICICIE2 database
+
+Create local trail file for extract process
+
+GGSCI> add exttrail /u01/app/oracle/product/gg/dirdat/pd, extract PICICIE2
+
+Create parameter file for extract process
+GGSCI> edit param PICICIE2
+EXTRACT PICICIE2
+USERID ogg, PASSWORD ogg
+EXTTRAIL /u01/app/oracle/product/gg/dirdat/pd
+TABLE ICICI.DEPT;
+
+
+Create GG DP Process
+GGSCI> Add extract PICICID2, EXTTRAILSOURCE /u01/app/oracle/product/gg/dirdat/pd
+
+Create remote trail file for extract process
+GGSCI> Add rmttrail /u01/app/oracle/product/gg/dirdat/pd, extract PICICID2
+
+
+Create parameter file for data pump process
+GGSCI> edit param PICICID2
+EXTRACT PICICID2
+USERID ogg, PASSWORD ogg
+RMTHOST ggdev, MGRPORT 7809
+RMTTRAIL /u01/app/oracle/product/gg/dirdat/pd
+TABLE ICICI.DEPT;
+
+##################################################
+
+Create GG Replicate on target
+On GGDEV:
+=========
+GGSCI> dblogin userid ogg, password ogg
+GGSCI> add replicat DHDFCR2, integrated exttrail /u01/app/oracle/product/gg/dirdat/pd
+
+Create parameter file for replicat on target
+GGSCI> edit param DHDFCR2
+REPLICAT DHDFCR2
+USERID ogg, PASSWORD ogg
+ASSUMETARGETDEFS
+MAP ICICI.DEPT TARGET HDFC.DEPT;
+
+############################################
+On Proddb:
+==========
+GGSCI> ADD EXTRACT INITLE, SOURCEISTABLE
+info all 
+
+Edit parameter file for initial load extract
+
+GGSCI> EDIT PARAM INITLE
+EXTRACT INITLE
+userid ogg, password ogg
+RMTHOST ggdev, mgrport 7809
+RMTTASK REPLICAT, GROUP INITLR
+TABLE ICICI.DEPT;
+
+Add initial load Replicat on target
+On Devdb:
+=========
+GGSCI> ADD REPLICAT INITLR, SPECIALRUN
+
+Edit parameter file for initial load replicat
+GGSCI> EDIT PARAM INITLR
+REPLICAT INITLR
+userid ogg, password ogg
+ASSUMETARGETDEFS
+MAP ICICI.DEPT, TARGET HDFC.DEPT;
+
+
+On proddb:
+==========
+GGSCI> start PICICIE2
+GGSCI> start PICICID2
+
+
+now check SCN on prodddb(source).
+
+On proddb:
+==========
+SQL> select current_scn from v$database;
+
+On proddb:
+==========
+sqlplus / as sysdba
+update icici.dept set loc='INDIA' where deptno=30;
+commit;
+
+On proddb:
+==========
+GGSCI> start INITLE 
+GGSCI> INFO INITLE 
+
+On Devdb:
+=========
+sqlplus / as sysdba
+select * from tom.dept;
+
+On proddb:
+==========
+sqlplus fox/fox
+update icici.dept set loc='US' where deptno=40;
+commit;
+
+On Devdb:
+=========
+GGSCI> start DHDFCR2, aftercsn <Initial_load_scn>
+
+GGSCI> start DHDFCR2, aftercsn 4698554
