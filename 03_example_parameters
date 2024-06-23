@@ -1,0 +1,19 @@
+table1 I U
+table2 I U D
+table3 D
+table4 I U
+
+EXTRACT ext1
+USERID ogg, PASSWORD ogg
+EXTTRAIL /u01/app/oracle/product/gg/dirdat/ex
+IGNOREDELETES
+TABLE hrms_user.table1;
+GETDELETES
+TABLE hrms_user.table2;
+IGNOREINSERTS
+IGNOREUPDATES
+TABLE hrms_user.table3;
+GETINSERTS
+GETUPDATES
+IGNOREDELETES
+TABLE hrms_user.table4;
