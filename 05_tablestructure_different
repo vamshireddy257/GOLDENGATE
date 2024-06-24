@@ -101,7 +101,7 @@ GGSCI> edit param DHDFC3R
 REPLICAT DHDFC3R
 USERID ogg, PASSWORD ogg
 SOURCEDEFS /u01/app/oracle/product/gg/dirdef/ICICISTUDENT.def
-MAP ICICI.STUDENT TARGET HDFC.STD, COLMAP(student_number=st_no,fees=fee, st_name=name, mobile_no=mobile_no);
+MAP ICICI.STUDENT TARGET HDFC.STD , COLMAP(student_number=st_no , fees=fee , st_name=name , mobile_no=mobile_no);
 
 SOURCEDEFS = specifies the source definitions file location on target server
 COLMAP = specifies the non-default mapping of columns from source to target
