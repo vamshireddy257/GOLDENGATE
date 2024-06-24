@@ -1,0 +1,127 @@
+DATABASE	proddb		devdb
+schema 		icici		hdfc
+table		student		std
+STRUCTURE	diff		diff
+
+
+Create student table on proddb
+
+On Proddb:
+==========
+sqlplus / as sysdba
+CREATE TABLE icici.student
+(
+st_no NUMBER PRIMARY KEY,
+name VARCHAR2(30),
+fee NUMBER,
+mobile_no NUMBER
+);
+
+
+On target, create std table with different column names completely
+
+On Devdb:
+=========
+sqlplus / as sysdba
+CREATE TABLE hdfc.std
+(
+student_number NUMBER PRIMARY KEY,
+fees NUMBER,
+st_name VARCHAR2(30),
+mobile_no NUMBER
+);
+
+Connect to database via Golden Gate and add table level supplemental logging
+
+On proddb:
+==========
+cd $GG_HOME
+./ggsci
+GGSCI> dblogin userid ogg, password ogg
+Successfully logged into database.
+GGSCI> add trandata ICICI.STUDENT
+
+Create Definitions File
+
+On proddb:
+==========
+GGSCI> edit params defgen1
+DEFSFILE /u01/app/oracle/product/gg/dirdef/ICICISTUDENT.def
+USERID ogg PASSWORD ogg
+TABLE ICICI.STUDENT;
+
+Exit the GG prompt and initiate defgen utility to generate definitions file
+
+On proddb:
+==========
+cd $GG_HOME
+./defgen paramfile /u01/app/oracle/product/gg/dirprm/defgen1.prm
+
+Copy the definitions file on target server under $GG_HOME/dirdef location
+
+On proddb:
+==========
+cd $GG_HOME/dirdef
+scp ICICISTUDENT.def oracle@ggdev:$GG_HOME/dirdef/
+
+Create extract on source
+
+On proddb:
+==========
+GGSCI> add extract PICICI3E, integrated tranlog, begin now
+GGSCI> register extract PICICI3E database
+GGSCI> add exttrail /u01/app/oracle/product/gg/dirdat/t3, extract PICICI3E
+GGSCI (ggprod) 3> edit param PICICI3E
+EXTRACT PICICI3E
+USERID ogg, PASSWORD ogg
+EXTTRAIL /u01/app/oracle/product/gg/dirdat/t3
+TABLE ICICI.STUDENT;
+
+
+Create data pump process
+
+GGSCI> Add extract PICICI3D, EXTTRAILSOURCE /u01/app/oracle/product/gg/dirdat/t3
+GGSCI> Add rmttrail /u01/app/oracle/product/gg/dirdat/r3, extract PICICI3D
+GGSCI> edit param PICICI3D
+EXTRACT PICICI3D
+USERID ogg, PASSWORD ogg
+RMTHOST ggdev, MGRPORT 7809
+RMTTRAIL /u01/app/oracle/product/gg/dirdat/r3
+TABLE ICICI.STUDENT;
+
+
+
+Create GG Replicate on target with mapping details of our columns
+
+On Devdb:
+==========
+GGSCI> dblogin userid ogg, password ogg
+GGSCI> add replicat DHDFC3R, integrated exttrail /u01/app/oracle/product/gg/dirdat/r3
+GGSCI> edit param DHDFC3R
+REPLICAT DHDFC3R
+USERID ogg, PASSWORD ogg
+SOURCEDEFS /u01/app/oracle/product/gg/dirdef/ICICISTUDENT.def
+MAP ICICI.STUDENT TARGET HDFC.STD, COLMAP(student_number=st_no,fees=fee, st_name=name, mobile_no=mobile_no);
+
+SOURCEDEFS = specifies the source definitions file location on target server
+COLMAP = specifies the non-default mapping of columns from source to target
+
+
+Start the Extract, Pump and Replicat process
+On proddb:
+==========
+GGSCI> start PICICI3E
+GGSCI> start PICICI3D
+
+On devdb:
+=========
+GGSCI> start DHDFC3R
+
+On proddb:
+==========
+INSERT INTO icici.student VALUES (1,'Alpha',10,100);
+COMMIT;
+INSERT INTO icici.student VALUES (2,'Beta',20,200);
+COMMIT;
+INSERT INTO icici.student VALUES (3,'Gamma',30,300);
+COMMIT;
