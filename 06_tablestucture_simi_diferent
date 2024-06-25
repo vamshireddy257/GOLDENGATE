@@ -1,0 +1,132 @@
+Things to observe is USEDEFAULTS parameter which is added in replicat.
+
+DATABASE	proddb			devdb
+schema 		icici			hdfc
+table		orders			order
+STRUCTURE	semidiff		semidiff
+
+
+Create orders table on proddb
+
+On Proddb: 
+==========
+sqlplus / as sysdba
+CREATE TABLE icici.orders
+(
+order_id NUMBER PRIMARY KEY,
+order_desc VARCHAR2(30),
+quantity NUMBER,
+CUSTOMER_ID NUMBER
+);
+
+
+On target, create "Purc_order" table with different column names completely
+
+On Devdb:
+=========
+sqlplus / as sysdba
+CREATE TABLE hdfc.Purc_order
+(
+order_id NUMBER PRIMARY KEY,
+order_desc VARCHAR2(30),
+order_quantity NUMBER,
+cust_id NUMBER
+);
+
+Connect to database via Golden Gate and add table level supplemental logging
+
+On proddb:
+==========
+cd $GG_HOME
+./ggsci
+GGSCI> dblogin userid ogg, password ogg
+Successfully logged into database.
+GGSCI> add trandata ICICI.ORDERS
+
+Create Definitions File
+
+On proddb:
+==========
+GGSCI> edit params defgen2
+DEFSFILE /u01/app/oracle/product/gg/dirdef/ICICIORDERS.def
+USERID ogg PASSWORD ogg
+TABLE ICICI.ORDERS;
+
+Exit the GG prompt and initiate defgen utility to generate definitions file
+
+On proddb:
+==========
+cd $GG_HOME
+./defgen paramfile /u01/app/oracle/product/gg/dirprm/defgen2.prm
+
+
+Copy the definitions file on target server under $GG_HOME/dirdef location
+
+On proddb:
+==========
+cd $GG_HOME/dirdef
+scp ICICIORDERS.def oracle@ggdev:$GG_HOME/dirdef/
+
+
+
+Create extract on source
+
+On proddb:
+==========
+GGSCI> add extract PICICI4E, integrated tranlog, begin now
+GGSCI> register extract PICICI4E database
+GGSCI> add exttrail /u01/app/oracle/product/gg/dirdat/t4, extract PICICI4E
+GGSCI (ggprod) 3> edit param PICICI4E
+EXTRACT PICICI4E
+USERID ogg, PASSWORD ogg
+EXTTRAIL /u01/app/oracle/product/gg/dirdat/t4
+TABLE ICICI.ORDERS;
+
+Create data pump process
+
+GGSCI> Add extract PICICI4D, EXTTRAILSOURCE /u01/app/oracle/product/gg/dirdat/t4
+GGSCI> Add rmttrail /u01/app/oracle/product/gg/dirdat/r4, extract PICICI4D
+GGSCI> edit param PICICI4D
+EXTRACT PICICI4D
+USERID ogg, PASSWORD ogg
+RMTHOST ggdev, MGRPORT 7809
+RMTTRAIL /u01/app/oracle/product/gg/dirdat/r4
+TABLE ICICI.ORDERS;
+
+
+Create GG Replicate on target with mapping details of our columns
+
+On Devdb:
+==========
+GGSCI> dblogin userid ogg, password ogg
+GGSCI> add replicat DHDFC4R, integrated exttrail /u01/app/oracle/product/gg/dirdat/r4
+
+GGSCI> edit param DHDFC4R
+REPLICAT DHDFC4R
+USERID ogg, PASSWORD ogg
+SOURCEDEFS /u01/app/oracle/product/gg/dirdef/ICICIORDERS.def
+MAP ICICI.ORDERS TARGET HDFC.PURC_ORDER , COLMAP(USEDEFAULTS,ORDER_QUANTITY=QUANTITY , CUST_ID=CUSTOMER_ID);
+
+
+
+Start the Extract, Pump and Replicat process
+On proddb:
+==========
+GGSCI> start PICICI4E
+GGSCI> start PICICI4D
+
+On devdb:
+=========
+GGSCI> start DHDFC4R
+
+
+On proddb:
+==========
+INSERT INTO icici.orders VALUES (1,'purchase',10,100);
+COMMIT;
+INSERT INTO icici.orders VALUES (2,'sales',20,200);
+COMMIT;
+INSERT INTO icici.orders VALUES (3,'returns',30,300);
+COMMIT;
+
+
