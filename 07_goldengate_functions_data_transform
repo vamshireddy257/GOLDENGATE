@@ -1,18 +1,20 @@
 
-SOURCE								TARGET
-EMPID 			NUMBER ,			EMP_ID 		Number ,		
+SOURCE(gg_emp)							TARGET (gg_emp_dev)
+
+EMPID 	 		NUMBER ,			    EMP_ID 		Number ,		
 FIRST_NAME 		Varchar2(10),		FULL_NAME 	Varchar2(20),		
 LAST_NAME 		Varchar2(10),		SALARY 		Number,	
-SALARY 			Number,				BONUS 		Number,	
-HOURLY_PRICE 	Number,				EMP_LEVEL 	Varchar2(20),	
+SALARY 			Number,				    BONUS 		Number,	
+HOURLY_PRICE 	Number,				  EMP_LEVEL 	Varchar2(20),	
 DEPT_NAME 		Varchar2(4),		DEPT_NAME 	Varchar2(4),	
-PHONE 			Number,				PHONE 		Varchar2(10),	
-COUNTRY 		Varchar2(20)		TRNX 		Date,	
-                                    COUNTRY 	Varchar2(20)
+PHONE 			Number,				    PHONE 		Varchar2(10),	
+COUNTRY 		Varchar2(20)		  TRNX 		Date,	
+                              COUNTRY 	Varchar2(20)
 
 
-
+###################
 Client Requirement
+###################
 If HOURLY_PRICE is above 75 then EMP_LEVEL = Senior, if HOURLY_PRICE is above 50 then EMP_LEVEL= Junior else EMP_LEVEL = fresher
 
 Give a 10% bonus to all employees and set target BONUS = 10% of SALARY
@@ -97,7 +99,6 @@ Copy the definitions file on target server under $GG_HOME/dirdef location
 
 cd dirdef/
 
-scp icici_gg_emp.def $GG_HOME/dirdef
 scp icici_gg_emp.def oracle@ggdev:$GG_HOME/dirdef/icici_gg_emp.def
 
 Create extract on source
@@ -165,11 +166,18 @@ Let us test our replication
 On proddb:
 ==========
 INSERT INTO ICICI.GG_EMP VALUES (1001,'vamshi', 'reddy', 2000, 70, 'HR', 987654321, 'USA');
+commit;
+
 INSERT INTO ICICI.GG_EMP VALUES (1002,'aditi', 'reddy', 5000, 110, NULL, 4444444444, 'UK');
+commit;
+
 INSERT INTO ICICI.GG_EMP VALUES (1003,'bandi', 'aditi', 1000, 10, 'FIN', 123123212, 'CAN');
 COMMIT;
 
 
 on DEVDB :
 ##########
+set lines 200
+col EMP_LEVEL for a12
+col country for a7
 select * from hdfc.GG_EMP_DEV;
