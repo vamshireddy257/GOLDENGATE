@@ -15,17 +15,17 @@ COUNTRY 		Varchar2(20)		  TRNX 		Date,
 ###################
 Client Requirement
 ###################
-If HOURLY_PRICE is above 75 then EMP_LEVEL = Senior, if HOURLY_PRICE is above 50 then EMP_LEVEL= Junior else EMP_LEVEL = fresher
+1)If HOURLY_PRICE is above 75 then EMP_LEVEL = Senior, if HOURLY_PRICE is above 50 then EMP_LEVEL= Junior else EMP_LEVEL = fresher
 
-Give a 10% bonus to all employees and set target BONUS = 10% of SALARY
+2)Give a 10% bonus to all employees and set target BONUS = 10% of SALARY
 
-If the source DEPT_NAME is missing, set it default IT
+3)If the source DEPT_NAME is missing, set it default IT
 
-TRNX on target must contain the exact time at which transaction has been executed
+4)TRNX on target must contain the exact time at which transaction has been executed
 
-Combine the FIRST_NAME and LAST_NAME on target as FULL_NAME
+5a)Combine the FIRST_NAME and LAST_NAME on target as FULL_NAME
 
-Convert target FULL_NAME into upper case
+5b)Convert target FULL_NAME into upper case
 
 
 Create gg_emp table on proddb
