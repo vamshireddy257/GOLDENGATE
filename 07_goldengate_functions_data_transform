@@ -1,0 +1,175 @@
+
+SOURCE								TARGET
+EMPID 			NUMBER ,			EMP_ID 		Number ,		
+FIRST_NAME 		Varchar2(10),		FULL_NAME 	Varchar2(20),		
+LAST_NAME 		Varchar2(10),		SALARY 		Number,	
+SALARY 			Number,				BONUS 		Number,	
+HOURLY_PRICE 	Number,				EMP_LEVEL 	Varchar2(20),	
+DEPT_NAME 		Varchar2(4),		DEPT_NAME 	Varchar2(4),	
+PHONE 			Number,				PHONE 		Varchar2(10),	
+COUNTRY 		Varchar2(20)		TRNX 		Date,	
+                                    COUNTRY 	Varchar2(20)
+
+
+
+Client Requirement
+If HOURLY_PRICE is above 75 then EMP_LEVEL = Senior, if HOURLY_PRICE is above 50 then EMP_LEVEL= Junior else EMP_LEVEL = fresher
+
+Give a 10% bonus to all employees and set target BONUS = 10% of SALARY
+
+If the source DEPT_NAME is missing, set it default IT
+
+TRNX on target must contain the exact time at which transaction has been executed
+
+Combine the FIRST_NAME and LAST_NAME on target as FULL_NAME
+
+Convert target FULL_NAME into upper case
+
+
+Create gg_emp table on proddb
+
+On Proddb:
+==========
+sqlplus / as sysdba
+CREATE TABLE icici.gg_emp
+(
+ EMPID NUMBER PRIMARY KEY,
+ FIRST_NAME Varchar2(10),
+ LAST_NAME Varchar2(10),
+ SALARY Number,
+ HOURLY_PRICE Number,
+ DEPT_NAME Varchar2(4),
+ PHONE Number,
+ COUNTRY Varchar2(20)
+); 
+
+Create GG_emp_dev on devdb
+
+On Devdb:
+=========
+sqlplus / as sysdba
+
+CREATE TABLE hdfc.GG_emp_dev
+(
+ EMP_ID Number PRIMARY KEY,
+ FULL_NAME Varchar2(20),
+ SALARY Number,
+ BONUS Number,
+ EMP_LEVEL Varchar2(20),
+ DEPT_NAME Varchar2(4),
+ PHONE Varchar2(10),
+ TRNX Date,
+ COUNTRY Varchar2(20)
+); 
+
+
+Connect to database via Golden Gate and add table level supplemental logging
+
+On proddb:
+==========
+cd $GG_HOME
+./ggsci
+GGSCI> dblogin userid ogg, password ogg
+Successfully logged into database.
+GGSCI> add trandata icici.gg_emp
+
+
+Create Source Definitions File
+
+First, we need to create a parameter file for DEFGEN utility. You can create it via GG prompt or manually via vi editor
+
+On proddb:
+==========
+GGSCI> edit params defgen5
+DEFSFILE ./dirdef/icici_gg_emp.def
+USERID ogg PASSWORD ogg
+TABLE ICICI.GG_EMP;
+
+Exit the GG prompt and initiate defgen utility to generate definitions file 
+
+On proddb:
+==========
+cd $GG_HOME
+./defgen paramfile ./dirprm/defgen5.prm
+
+
+Copy the definitions file on target server under $GG_HOME/dirdef location
+
+cd dirdef/
+
+scp icici_gg_emp.def $GG_HOME/dirdef
+scp icici_gg_emp.def oracle@ggdev:$GG_HOME/dirdef/icici_gg_emp.def
+
+Create extract on source
+On proddb:
+==========
+GGSCI> add extract PICICI5E, integrated tranlog, begin now
+GGSCI> register extract PICICI5E database
+GGSCI> add exttrail /u01/app/oracle/product/gg/dirdat/t5, extract PICICI5E
+GGSCI (ggprod) 3> edit param PICICI5E
+EXTRACT PICICI5E
+USERID ogg, PASSWORD ogg
+EXTTRAIL /u01/app/oracle/product/gg/dirdat/t5
+TABLE ICICI.GG_EMP;
+
+
+Create data pump process
+
+GGSCI> Add extract PICICI5D, EXTTRAILSOURCE ./dirdat/t5
+GGSCI> Add rmttrail /u01/app/oracle/product/gg/dirdat/r5, extract PICICI5D
+GGSCI> edit param PICICI5D
+EXTRACT PICICI5D
+USERID ogg, PASSWORD ogg
+RMTHOST ggdev, MGRPORT 7809
+RMTTRAIL /u01/app/oracle/product/gg/dirdat/r5
+TABLE ICICI.GG_EMP;
+
+
+
+Let us create replicat process as per the client requirement on target
+
+On Devdb:
+==========
+GGSCI> dblogin userid ogg, password ogg
+GGSCI> add replicat DHDFC5R, integrated exttrail /u01/app/oracle/product/gg/dirdat/r5
+GGSCI> edit param DHDFC5R
+REPLICAT DHDFC5R
+USERID ogg, PASSWORD ogg
+SOURCEDEFS ./dirdef/icici_gg_emp.def
+MAP ICICI.GG_EMP TARGET HDFC.GG_EMP_DEV, &
+COLMAP (EMP_ID=EMPID,
+FULL_NAME=@STRUP(@STRCAT(FIRST_NAME,' ',LAST_NAME)),
+SALARY=SALARY,
+BONUS=@COMPUTE(0.1*SALARY),
+EMP_LEVEL=@EVAL(HOURLY_PRICE > 75, 'SENIOR', HOURLY_PRICE > 50, 'JUNIOR', 'FRESHER'),
+Dept_name=@IF(@COLTEST(DEPT_NAME, NULL, MISSING),'IT',DEPT_NAME) ,
+Phone=@NUMSTR(PHONE),
+Trnx=@DATENOW(),
+Country=country
+);
+
+
+Start the Extract, Pump and Replicat process
+
+On proddb:
+==========
+GGSCI> start PICICI5E
+GGSCI> start PICICI5D
+
+On devdb:
+=========
+GGSCI> start DHDFC5R
+
+Let us test our replication
+
+On proddb:
+==========
+INSERT INTO ICICI.GG_EMP VALUES (1001,'vamshi', 'reddy', 2000, 70, 'HR', 987654321, 'USA');
+INSERT INTO ICICI.GG_EMP VALUES (1002,'aditi', 'reddy', 5000, 110, NULL, 4444444444, 'UK');
+INSERT INTO ICICI.GG_EMP VALUES (1003,'bandi', 'aditi', 1000, 10, 'FIN', 123123212, 'CAN');
+COMMIT;
+
+
+on DEVDB :
+##########
+select * from hdfc.GG_EMP_DEV;
