@@ -1,0 +1,147 @@
+schema replication
+Senario : New blank schema.
+
+replicat everything to source.
+DDL & DML
+
+Setup Schema Replication
+
+###############################################################################
+Create SBI_USER schema on both source and target server with below permissions#
+###############################################################################
+On proddb:
+==========
+Create user SBI_USER identified by SBI_USER;
+Grant connect, resource to SBI_USER;
+Alter user SBI_USER quota unlimited on users;
+
+On devdb:
+=========
+Create user SBI_USER identified by SBI_USER;
+Grant connect, resource to SBI_USER;
+Alter user SBI_USER quota unlimited on users;
+
+######################################
+add schema level supplemental logging
+######################################
+
+On proddb:
+==========
+GGSCI (ggprod) 2> add schematrandata SBI_USER
+
+######################################
+Add extract on source with below SBI_USER
+######################################
+
+On proddb:
+==========
+GGSCI> ADD EXTRACT sbiex1, INTEGRATED TRANLOG, BEGIN NOW
+EXTRACT (Integrated) added.
+
+GGSCI> register extract sbiex1 database	 only needed in integrated capture mode
+
+GGSCI> add exttrail /u01/app/oracle/product/gg/dirdat/e6, extract sbiex1
+
+GGSCI> edit param sbiex1
+
+EXTRACT sbiex1
+USERID ogg, PASSWORD ogg
+EXTTRAIL /u01/app/oracle/product/gg/dirdat/e6
+DDL INCLUDE ALL
+TABLE SBI_USER.*;
+
+########################
+Add data pump on source#
+########################
+On proddb:
+==========
+GGSCI> Add extract sbidp1, EXTTRAILSOURCE /u01/app/oracle/product/gg/dirdat/e6
+
+GGSCI> Add rmttrail /u01/app/oracle/product/gg/dirdat/r6, extract sbidp1
+
+GGSCI> edit param sbidp1
+
+EXTRACT sbidp1
+USERID ogg, PASSWORD ogg
+RMTHOST ggdev, MGRPORT 7809
+RMTTRAIL /u01/app/oracle/product/gg/dirdat/r6
+TABLE SBI_USER.*;
+
+#######################
+Add replicat on target#
+#######################
+
+On GGDEV:
+=========
+GGSCI>dblogin userid ogg, password ogg
+
+GGSCI> add replicat sbirep1, integrated exttrail /u01/app/oracle/product/gg/dirdat/r6
+
+GGSCI> edit param sbirep1
+
+REPLICAT sbirep1
+USERID ogg, PASSWORD ogg
+ASSUMETARGETDEFS
+MAP SBI_USER.* TARGET SBI_USER.*;
+
+#################################
+Start Extract, Pump and replicat#
+#################################
+
+GGSCI> start sbiex1
+GGSCI> start sbidp1
+
+GGSCI> start sbirep1
+
+
+Test Schema Replication
+
+Let us create table on source and check if table is replicated to E6P on target
+
+CREATE TABLE profiles
+(
+pname VARCHAR2(32) PRIMARY KEY,
+pemail VARCHAR2(64),
+paddr VARCHAR2(128)
+);
+
+Let us insert some rows on source and you should see same row replicated on target
+
+INSERT INTO profilesVALUES ('Scott','scott@gmail.com','USA');
+INSERT INTO profilesVALUES ('James','james@gmail.com','UK');
+
+commit;
+
+Let us create an index on source and you should see same replicated on target
+
+SQL> CREATE INDEX pemail_idx ON profiles(pemail);
+
+Let us create a cluster on source and you should see same replicated on target
+
+SQL> CREATE CLUSTER dept_no(deptno NUMBER);
+Let us create a sample procedure on source database
+
+SQL> CREATE OR REPLACE PROCEDURE getemail(Ppname IN VARCHAR2,
+Ppemail OUT VARCHAR2) IS
+vpemail VARCHAR2(64);
+BEGIN
+SELECT pemail into vpemail
+FROM profiles
+WHERE pname =ppname;
+END;
+/
+
+Procedure created.
+
+Connect to the target database to verify it has been created successfully. Let us grant permissions on PROFILES table to hrms_user user
+
+SQL> GRANT SELECT ON PROFILES TO hrms_user;
+Connect to target and verify if the permissions are granted or not.
+
+IMPORTANT NOTES ON SCHEMA LEVEL DDL REPLICATION
+Make sure the permissions that source schema has, the same are given to target schema as well otherwise most of the DDL will fail.
+
+In our example, both source and target schema names are same. If you have different source and target schema names, add below line in replicat to allow DDL mapping from source to target
+
+DDLOPTIONS MAPSESSIONSCHEMA source_schema TARGET target_schema;
+DDLOPTIONS MAPSESSIONSCHEMA hrms_user TARGET user2;
