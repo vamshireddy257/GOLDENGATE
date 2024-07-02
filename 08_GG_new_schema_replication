@@ -1,5 +1,5 @@
 schema replication
-Senario : New blank schema.
+Scenario : New blank schema.
 
 replicat everything to source.
 DDL & DML
@@ -38,7 +38,7 @@ On proddb:
 GGSCI> ADD EXTRACT sbiex1, INTEGRATED TRANLOG, BEGIN NOW
 EXTRACT (Integrated) added.
 
-GGSCI> register extract sbiex1 database	 only needed in integrated capture mode
+GGSCI> register extract sbiex1 database 
 
 GGSCI> add exttrail /u01/app/oracle/product/gg/dirdat/e6, extract sbiex1
 
@@ -53,6 +53,7 @@ TABLE SBI_USER.*;
 ########################
 Add data pump on source#
 ########################
+
 On proddb:
 ==========
 GGSCI> Add extract sbidp1, EXTTRAILSOURCE /u01/app/oracle/product/gg/dirdat/e6
@@ -107,8 +108,8 @@ paddr VARCHAR2(128)
 
 Let us insert some rows on source and you should see same row replicated on target
 
-INSERT INTO profilesVALUES ('Scott','scott@gmail.com','USA');
-INSERT INTO profilesVALUES ('James','james@gmail.com','UK');
+INSERT INTO profiles VALUES ('Scott','scott@gmail.com','USA');
+INSERT INTO profiles VALUES ('James','james@gmail.com','UK');
 
 commit;
 
@@ -116,9 +117,7 @@ Let us create an index on source and you should see same replicated on target
 
 SQL> CREATE INDEX pemail_idx ON profiles(pemail);
 
-Let us create a cluster on source and you should see same replicated on target
 
-SQL> CREATE CLUSTER dept_no(deptno NUMBER);
 Let us create a sample procedure on source database
 
 SQL> CREATE OR REPLACE PROCEDURE getemail(Ppname IN VARCHAR2,
@@ -137,6 +136,11 @@ Connect to the target database to verify it has been created successfully. Let u
 
 SQL> GRANT SELECT ON PROFILES TO hrms_user;
 Connect to target and verify if the permissions are granted or not.
+
+
+
+create few SEQUENCEs and chk the sync.
+create few synonyms and chk.
 
 IMPORTANT NOTES ON SCHEMA LEVEL DDL REPLICATION
 Make sure the permissions that source schema has, the same are given to target schema as well otherwise most of the DDL will fail.
